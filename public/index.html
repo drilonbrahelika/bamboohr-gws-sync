@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Directory Sync</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #4F8CFF; --on-accent: #0B0D10;
+    --bg: #0B0D10; --panel: #12151A; --inset: #0F1216; --hover: #171B21; --line: #232830; --line-soft: #1E232A; --control: #2C323B;
+    --text: #E6E8EB; --text-2: #C9CED6; --muted: #A3ABB7; --faint: #8A93A0; --ghost: #5C6573;
+    --ok: #3DD68C; --warn: #F5B544; --err: #FF6B6B; --info: #8AB4FF;
+    --add: #7EE2B0; --del: #FF9B9B;
+    --t-create: #123222; --t-update: #15233D; --t-suspend: #3A2A10; --t-skip: #1E232A;
+    --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #F6F7F9; --panel: #FFFFFF; --inset: #F9FAFB; --hover: #EEF0F3; --line: #E2E5EA; --line-soft: #ECEEF1; --control: #D3D8DF;
+      --text: #14171C; --text-2: #2B3038; --muted: #4E5663; --faint: #5F6773; --ghost: #8A919C;
+      --ok: #137A48; --warn: #9A5B00; --err: #C42B2B; --info: #1F5FCC; --add: #137A48; --del: #C42B2B;
+      --t-create: #E3F5EB; --t-update: #E5EEFC; --t-suspend: #FCF0DC; --t-skip: #EEF0F3;
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 Geist, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--info); text-decoration: none; } a:hover { text-decoration: underline; }
+  .mono { font-family: var(--mono); }
+  .muted { color: var(--faint); } .small { font-size: 12px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app { display: flex; min-height: 100vh; }
+  aside { width: 232px; flex: none; border-right: 1px solid var(--line); padding: 20px 14px; display: flex; flex-direction: column; gap: 24px; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; gap: 10px; align-items: center; padding: 0 6px; min-width: 0; }
+  .logo { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 600; flex: none; overflow: hidden; }
+  .logo img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+  .brand b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  nav { display: flex; flex-direction: column; gap: 2px; }
+  nav a { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 7px; color: var(--muted); }
+  nav a:hover { background: var(--hover); text-decoration: none; color: var(--text); }
+  nav a.active { background: var(--hover); color: var(--text); }
+  nav svg { width: 16px; height: 16px; flex: none; }
+  .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+  .chip-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--faint); display: flex; flex-direction: column; gap: 4px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: currentColor; flex: none; }
+
+  main { flex: 1; min-width: 0; padding: 28px 32px 64px; max-width: 1280px; display: flex; flex-direction: column; gap: 20px; }
+  .head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; }
+  h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); }
+  .chip { border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font-family: var(--mono); }
+  .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .pill.plain { color: var(--muted); border-color: var(--control); }
+  .s-success, .s-done, .s-ok { color: var(--ok); } .s-partial, .s-running, .s-warn { color: var(--warn); }
+  .s-failed, .s-error { color: var(--err); } .s-planned, .s-preview, .s-info { color: var(--info); } .s-skipped { color: var(--muted); }
+
+  .btn { height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--control); background: var(--panel); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 7px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, var(--panel)); }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .card.inset { background: var(--inset); }
+  .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .grow { flex: 999 1 560px; min-width: 0; } .side { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .kpi span { font-size: 12px; color: var(--faint); } .kpi b { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kpi small { font-size: 12px; color: var(--faint); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .step { border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; background: var(--inset); display: flex; flex-direction: column; gap: 8px; }
+  .bar { height: 4px; border-radius: 2px; background: var(--line-soft); } .bar i { display: block; height: 4px; border-radius: 2px; background: var(--accent); min-width: 2px; }
+  .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; } .kv span:first-child { color: var(--muted); } .kv span:last-child { font-family: var(--mono); text-align: right; word-break: break-all; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--faint); font-weight: 500; padding: 8px 6px; white-space: nowrap; }
+  td { padding: 9px 6px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+  tr.click { cursor: pointer; } tr.click:hover td { background: var(--hover); }
+  .num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .action { border: 1px solid var(--line); border-radius: 10px; background: var(--inset); }
+  .action-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; }
+  .type { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 6px; }
+  .type.create { background: var(--t-create); color: var(--add); } .type.update { background: var(--t-update); color: var(--info); }
+  .type.suspend { background: var(--t-suspend); color: var(--warn); } .type.skip { background: var(--t-skip); color: var(--muted); }
+  .diff { width: 100%; font-family: var(--mono); font-size: 12px; border-collapse: collapse; }
+  .diff td { padding: 6px 14px 6px 0; border-top: 1px solid var(--line-soft); word-break: break-word; }
+  .diff td:first-child { padding-left: 14px; color: var(--faint); width: 150px; white-space: nowrap; }
+  .diff .del { color: var(--del); } .diff .add { color: var(--add); }
+  .sub { padding: 10px 14px; border-top: 1px solid var(--line-soft); font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+  details > summary { cursor: pointer; color: var(--faint); list-style: none; } details > summary::-webkit-details-marker { display: none; }
+  details[open] > summary { margin-bottom: 6px; }
+  pre { margin: 0; white-space: pre-wrap; word-break: break-word; color: var(--text-2); }
+  .console { font-family: var(--mono); font-size: 12px; line-height: 1.7; max-height: 520px; overflow: auto; }
+  .console div { white-space: pre-wrap; word-break: break-word; }
+  .console .t { color: var(--ghost); }
+
+  label.field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
+  input[type=text], input[type=url], input[type=number], input[type=search], input[type=email], input[type=password], select, textarea {
+    height: 38px; border-radius: 8px; border: 1px solid var(--control); background: var(--inset); padding: 0 12px; font-size: 14px; width: 100%; color: var(--text); }
+  input.mono { font-family: var(--mono); font-size: 13px; }
+  .toggle { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; border-top: 1px solid var(--line-soft); cursor: pointer; }
+  .toggle input { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; align-items: start; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .map-row { display: grid; grid-template-columns: 1fr 20px 1fr 36px; gap: 8px; align-items: center; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--control); background: var(--panel); cursor: pointer; display: grid; place-items: center; color: var(--muted); }
+  .empty { color: var(--faint); padding: 20px 0; text-align: center; }
+  .cred { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; border-top: 1px solid var(--line-soft); }
+  .cred:first-of-type { border-top: 0; }
+  .cred-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; }
+  .cred input[type=file] { font-size: 13px; color: var(--muted); }
+  .tag { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .linkish { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 12px; }
+  .banner { border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--text); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+  #toast { position: fixed; right: 20px; bottom: 20px; max-width: 420px; padding: 12px 16px; border-radius: 10px; background: var(--text); color: var(--bg); font-size: 13px; display: none; z-index: 10; }
+
+  @media (max-width: 860px) {
+    .app { flex-direction: column; }
+    aside { width: auto; height: auto; position: static; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; gap: 12px; }
+    nav { flex-direction: row; overflow-x: auto; }
+    nav a { white-space: nowrap; }
+    .side-foot { display: none; }
+    main { padding: 20px 16px 48px; }
+    .grid2 { grid-template-columns: 1fr; }
+    .pair { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">
+      <div class="logo" id="logo"></div>
+      <div style="min-width:0"><b id="appName">Directory Sync</b><span class="small muted">BambooHR → Google Workspace</span></div>
+    </div>
+    <nav aria-label="Main" id="nav">
+      <a href="#/overview" data-r="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Overview</a>
+      <a href="#/runs" data-r="runs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Runs</a>
+      <a href="#/employee" data-r="employee"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Employee lookup</a>
+      <a href="#/connections" data-r="connections"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 7H6a4 4 0 0 0 0 8h3M15 7h3a4 4 0 0 1 0 8h-3M8 11h8"/></svg>Connections</a>
+      <a href="#/settings" data-r="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</a>
+    </nav>
+    <div class="side-foot">
+      <div class="chip-box" id="schedBox"></div>
+      <div class="small muted" id="support" style="padding:0 6px"></div>
+    </div>
+  </aside>
+  <main id="view" aria-live="polite"></main>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const fmtTime = (iso) => iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+const fmtClock = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour12: false }) + "." + String(new Date(iso).getMilliseconds()).padStart(3, "0") : "";
+const fmtMs = (ms) => ms == null ? "—" : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+const n = (v) => Number(v ?? 0).toLocaleString();
+const relTime = (iso) => {
+  const m = Math.round((new Date(iso) - Date.now()) / 60000);
+  if (Math.abs(m) < 60) return m >= 0 ? `in ${m}m` : `${-m}m ago`;
+  const h = Math.floor(Math.abs(m) / 60), r = Math.abs(m) % 60;
+  return m >= 0 ? `in ${h}h ${r}m` : `${h}h ago`;
+};
+const pill = (status, label) => `<span class="pill s-${esc(status)}">${esc(label ?? status)}</span>`;
+
+let state = { status: null, settings: null, timer: null };
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => (t.style.display = "none"), 5000); }
+
+/* ---------- branding ---------- */
+function applyBranding(b) {
+  if (!b) return;
+  document.documentElement.style.setProperty("--accent", b.accentColor);
+  const [r, g, bl] = [1, 3, 5].map((i) => parseInt(b.accentColor.slice(i, i + 2), 16));
+  document.documentElement.style.setProperty("--on-accent", (r * 299 + g * 587 + bl * 114) / 1000 > 150 ? "#0B0D10" : "#FFFFFF");
+  document.title = b.appName;
+  $("#appName").textContent = b.appName;
+  $("#logo").innerHTML = b.logoUrl ? `<img src="${esc(b.logoUrl)}" alt="">` : esc(b.appName.trim().charAt(0).toUpperCase());
+  if (b.logoUrl) document.querySelector("link[rel=icon]").href = b.logoUrl;
+  $("#support").innerHTML = b.supportContact ? `Support: ${/^https?:/.test(b.supportContact) ? `<a href="${esc(b.supportContact)}" target="_blank" rel="noopener">${esc(b.supportContact)}</a>` : /@/.test(b.supportContact) ? `<a href="mailto:${esc(b.supportContact)}">${esc(b.supportContact)}</a>` : esc(b.supportContact)}` : "";
+}
+
+async function refreshStatus() {
+  const s = await api("/api/status");
+  state.status = s;
+  applyBranding(s.branding);
+  const next = s.nextRuns?.[0];
+  $("#schedBox").innerHTML = s.running
+    ? `<span class="s-warn" style="display:flex;gap:6px;align-items:center"><span class="dot"></span>Run in progress</span><a class="mono" href="#/runs/${esc(s.running)}">open live run</a>`
+    : next
+      ? `<span class="s-ok" style="display:flex;gap:6px;align-items:center"><span class="dot"></span>Scheduler armed</span><span class="mono">next ${esc(fmtTime(next))}</span>`
+      : `<span style="display:flex;gap:6px;align-items:center"><span class="dot"></span>Schedule off</span>`;
+  return s;
+}
+
+/* ---------- actions ---------- */
+async function startRun(dryRun, employeeId) {
+  const what = employeeId ? `employee ${employeeId}` : "all employees";
+  if (!dryRun && !confirm(`Apply changes for ${what} in Google Workspace?\n\nTip: run a Preview first to review every change.`)) return;
+  try {
+    const { id } = await api("/api/sync", { method: "POST", body: JSON.stringify({ dryRun, employeeId }) });
+    location.hash = `#/runs/${id}`;
+  } catch (e) { toast(e.message); }
+}
+
+/* ---------- views ---------- */
+const views = {
+  async overview() {
+    const [s, runs, settings] = await Promise.all([refreshStatus(), api("/api/runs?limit=8"), api("/api/settings")]);
+    state.settings = settings;
+    const last = runs[0];
+    const live = runs.find((r) => !r.dryRun && r.status !== "failed");
+    const ref = last && last.status !== "failed" ? last : live;
+    const pending = ref ? ref.counts.create + ref.counts.update + ref.counts.suspend : null;
+    const inSync = ref && ref.counts.employees ? Math.max(0, 100 - (pending / ref.counts.employees) * 100).toFixed(1) + "%" : "—";
+    const totalMs = last?.steps?.reduce((a, x) => a + x.ms, 0) || 1;
+    const next = s.nextRuns?.[0];
+    $("#view").innerHTML = `
+      ${s.configured ? "" : `<div class="banner">Finish setup: add your BambooHR and Google credentials under <a href="#/connections">Connections</a>.</div>`}
+      <div class="head">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h1>Sync engine</h1>
+          <div class="chips"><span class="chip">${s.bambooSubdomain ? esc(s.bambooSubdomain) + ".bamboohr.com" : "BambooHR not set"}</span><span>→</span><span class="chip">${esc(s.googleAdmin || "Google admin not set")}</span></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn" id="pv" ${s.running ? "disabled" : ""}>Preview changes</button>
+          <button class="btn primary" id="go" ${s.running ? "disabled" : ""}>Run sync</button>
+        </div>
+      </div>
+      ${s.running ? `<div class="banner">A run is in progress. <a href="#/runs/${esc(s.running)}">Watch it live</a>.</div>` : ""}
+      <div class="kpis">
+        <div class="kpi"><span>BambooHR employees</span><b>${ref ? n(ref.counts.employees) : "—"}</b><small>from ${ref ? esc(fmtTime(ref.startedAt)) : "no runs yet"}</small></div>
+        <div class="kpi"><span>Google users</span><b>${ref ? n(ref.counts.googleUsers) : "—"}</b><small>${ref ? "directory snapshot" : "—"}</small></div>
+        <div class="kpi"><span>In sync</span><b>${inSync}</b><small>${pending == null ? "run a preview" : `${n(pending)} pending changes`}</small></div>
+        <div class="kpi"><span>Last run</span><b>${last ? fmtMs(last.durationMs) : "—"}</b><small>${last ? `${esc(last.status)} · ${last.dryRun ? "preview" : "live"}` : "—"}</small></div>
+        <div class="kpi"><span>Next run</span><b>${next ? new Date(next).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "off"}</b><small>${next ? esc(relTime(next)) : "no schedule"}</small></div>
+      </div>
+      <section class="card">
+        <div class="card-head"><h2>Last run pipeline</h2>${last ? `<a class="mono small" href="#/runs/${esc(last.id)}">${esc(last.id)} · ${last.dryRun ? "preview" : "live"} · ${fmtMs(last.durationMs)}</a>` : ""}</div>
+        ${last?.steps?.length ? `<div class="steps">${last.steps.map((st, i) => `
+          <div class="step">
+            <div style="display:flex;justify-content:space-between"><span class="mono small muted">0${i + 1}</span><span class="small s-ok">● ok</span></div>
+            <span style="font-weight:500">${esc(st.name)}</span>
+            <span class="small" style="color:var(--muted)">${esc(st.detail)}</span>
+            <div class="bar"><i style="width:${Math.max(1, Math.round((st.ms / totalMs) * 100))}%"></i></div>
+            <span class="mono small muted">${fmtMs(st.ms)}</span>
+          </div>`).join("")}</div>` : last?.error ? `<div class="s-error mono small">${esc(last.error)}</div>` : `<div class="empty">No runs yet. Start with <b>Preview changes</b>; nothing is changed in Google.</div>`}
+      </section>
+      <div class="row">
+        <section class="card grow">
+          <div class="card-head"><h2>Recent runs</h2><a class="small" href="#/runs">All runs</a></div>
+          ${runsTable(runs.slice(0, 6))}
+        </section>
+        <div class="side">
+          <section class="card"><div class="card-head"><h2>Connections</h2><a class="small" href="#/connections">Details</a></div><div id="conns" class="small muted">Checking…</div></section>
+          <section class="card"><h2>Guardrails</h2>
+            <div class="kv"><span>Max suspensions per run</span><span>${settings.maxSuspensionsPerRun}</span></div>
+            <div class="kv"><span>Protected OUs</span><span>${settings.protectedOus.length || "none"}</span></div>
+            <div class="kv"><span>Reactivate suspended</span><span>${settings.reactivateSuspended ? "on" : "off"}</span></div>
+            <div class="kv"><span>Suspend deleted employees</span><span>${settings.suspendMissing ? "on" : "off"}</span></div>
+            <div class="kv"><span>Managed domains</span><span>${esc(settings.managedDomains.join(", ") || "already used in Workspace")}</span></div>
+          </section>
+        </div>
+      </div>`;
+    $("#pv").onclick = () => startRun(true);
+    $("#go").onclick = () => startRun(false);
+    api("/api/connections").then((cs) => {
+      const el = $("#conns"); if (!el) return;
+      el.className = ""; el.innerHTML = cs.map(connLine).join("");
+    }).catch(() => {});
+    if (s.running) poll(views.overview, 3000);
+  },
+
+  async runs() {
+    const runs = await api("/api/runs?limit=200");
+    $("#view").innerHTML = `<div class="head"><h1>Runs</h1><span class="small muted">Last ${runs.length} runs are kept</span></div>
+      <section class="card">${runsTable(runs)}</section>`;
+  },
+
+  async run(id) {
+    const r = await api(`/api/runs/${encodeURIComponent(id)}`);
+    const keep = { filter: $("#filter")?.dataset.v ?? "all", q: $("#q")?.value ?? "", scroll: window.scrollY };
+    const types = ["create", "update", "suspend", "skip"];
+    const errors = r.actions.filter((a) => a.status === "error").length;
+    $("#view").innerHTML = `
+      <div class="head">
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+          <a class="small" href="#/runs">← Runs</a>
+          <h1>Run <span class="mono" style="font-weight:500;color:var(--muted);word-break:break-all">${esc(r.id)}</span></h1>
+          <div class="chips">${pill(r.status)}<span class="pill plain">${r.dryRun ? "preview" : "live"}</span><span class="pill plain">${esc(r.trigger)}</span>${r.employeeId ? `<span class="pill plain">employee #${esc(r.employeeId)}</span>` : ""}
+            <span class="mono">${esc(fmtTime(r.startedAt))}${r.durationMs != null ? ` · ${fmtMs(r.durationMs)}` : ""}</span></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          ${r.dryRun && r.status !== "running" && r.status !== "failed" && r.actions.some((a) => a.type !== "skip") ? `<button class="btn primary" id="applyNow">Apply these changes</button>` : ""}
+          <a class="btn" href="/api/runs/${encodeURIComponent(r.id)}" download="${esc(r.id)}.json" style="text-decoration:none">Download JSON</a>
+        </div>
+      </div>
+      ${r.error ? `<div class="banner mono">${esc(r.error)}</div>` : ""}
+      <div class="row">
+        <section class="card grow">
+          <div class="card-head"><h2>Changes</h2>
+            <div style="display:flex;gap:6px;flex-wrap:wrap" role="group" aria-label="Filter" id="filter" data-v="${esc(keep.filter)}">
+              ${["all", ...types, "error"].map((t) => {
+                const c = t === "all" ? r.actions.length : t === "error" ? errors : r.actions.filter((a) => a.type === t).length;
+                return `<button class="btn sm ${keep.filter === t ? "on" : ""}" data-f="${t}" aria-pressed="${keep.filter === t}">${t === "all" ? "All" : t[0].toUpperCase() + t.slice(1)} ${c}</button>`;
+              }).join("")}
+            </div>
+          </div>
+          <label class="field">Search people, emails or BambooHR ids<input type="search" id="q" value="${esc(keep.q)}" placeholder="name, email or id"></label>
+          <div id="acts" style="display:flex;flex-direction:column;gap:10px"></div>
+        </section>
+        <div class="side">
+          <section class="card"><h2>Summary</h2>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              ${[["Employees", r.counts.employees], ["Google users", r.counts.googleUsers], ["Create", r.counts.create], ["Update", r.counts.update], ["Suspend", r.counts.suspend], ["Errors", r.counts.errors]]
+                .map(([k, v]) => `<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px"><b style="font-size:20px;font-variant-numeric:tabular-nums">${n(v)}</b><div class="small muted">${k}</div></div>`).join("")}
+            </div>
+            ${(r.steps || []).map((st) => `<div class="kv"><span>${esc(st.name)}</span><span>${fmtMs(st.ms)}</span></div>`).join("")}
+          </section>
+          <section class="card inset"><h2>Event log</h2>
+            <div class="console" id="console">${(r.events || []).map((e) => `<div><span class="t">${esc(fmtClock(e.t))}</span> <span class="s-${e.level === "ok" ? "ok" : e.level}">${esc(e.level.toUpperCase().padEnd(5))}</span> ${esc(e.msg)}</div>`).join("") || `<span class="muted">No events recorded.</span>`}</div>
+          </section>
+        </div>
+      </div>`;
+    const draw = () => {
+      const f = $("#filter").dataset.v, q = $("#q").value.trim().toLowerCase();
+      const list = r.actions.filter((a) => (f === "all" || a.type === f || (f === "error" && a.status === "error")) &&
+        (!q || [a.name, a.email, a.employeeId].some((x) => String(x ?? "").toLowerCase().includes(q))));
+      $("#acts").innerHTML = list.length ? list.slice(0, 500).map(actionCard).join("") + (list.length > 500 ? `<div class="empty">Showing 500 of ${list.length}. Narrow with search.</div>` : "")
+        : `<div class="empty">${r.status === "running" ? "Working…" : r.actions.length ? "Nothing matches." : "Nothing to change. Google Workspace matches BambooHR."}</div>`;
+    };
+    $("#filter").onclick = (e) => { const b = e.target.closest("[data-f]"); if (!b) return; $("#filter").dataset.v = b.dataset.f; $("#filter").querySelectorAll("button").forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b); }); draw(); };
+    $("#q").oninput = draw;
+    $("#applyNow")?.addEventListener("click", () => startRun(false, r.employeeId));
+    draw();
+    const c = $("#console"); c.scrollTop = c.scrollHeight;
+    if (r.status === "running") { window.scrollTo(0, keep.scroll); poll(() => views.run(id), 1500); } else refreshStatus();
+  },
+
+  async employee() {
+    $("#view").innerHTML = `<div class="head"><div style="display:flex;flex-direction:column;gap:6px"><h1>Employee lookup</h1><span class="muted">Sync a single person by BambooHR employee id. Preview first to see the field-level changes.</span></div></div>
+      <section class="card" style="max-width:640px">
+        <form id="empForm" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <label class="field" style="flex:1 1 220px">BambooHR employee id<input type="text" id="empId" inputmode="numeric" pattern="[0-9]+" required placeholder="e.g. 123" class="mono"></label>
+          <button class="btn" type="submit" data-mode="preview">Preview</button>
+          <button class="btn primary" type="submit" data-mode="apply">Apply</button>
+        </form>
+      </section>`;
+    $("#empForm").onsubmit = (e) => { e.preventDefault(); startRun(e.submitter?.dataset.mode !== "apply", $("#empId").value.trim()); };
+  },
+
+  async connections() {
+    const s = await refreshStatus();
+    const cr = await api("/api/credentials");
+    $("#view").innerHTML = `<div class="head"><div style="display:flex;flex-direction:column;gap:6px"><h1>Connections</h1><span class="muted">Credentials and live round-trips to each API.</span></div><button class="btn" id="retest">Test again</button></div>
+      <div class="row">
+        <div class="grow" style="display:flex;flex-direction:column;gap:20px;min-width:0">
+          ${credCard(cr)}
+          <section class="card"><h2>APIs</h2><div id="conns" class="muted">Checking…</div></section>
+        </div>
+        <div class="side">
+          <section class="card"><h2>Scheduler</h2>
+            <div class="kv"><span>Timezone</span><span>${esc(s.timezone)}</span></div>
+            ${s.nextRuns.length ? s.nextRuns.map((d, i) => `<div class="kv"><span>${i ? "then" : "next"}</span><span>${esc(fmtTime(d))}</span></div>`).join("") : `<div class="kv"><span>Status</span><span>off</span></div>`}
+          </section>
+          <section class="card"><h2>Environment</h2><span class="small muted">Which variables are set. Values are never shown.</span>
+            ${Object.entries(s.env).map(([k, v]) => `<div class="kv"><span class="mono">${esc(k)}</span><span class="${v ? "s-ok" : "muted"}">${v ? "set" : "not set"}</span></div>`).join("")}
+          </section>
+        </div>
+      </div>`;
+    const test = async () => {
+      $("#conns").innerHTML = "Checking…";
+      const cs = await api("/api/connections");
+      $("#conns").className = ""; $("#conns").innerHTML = cs.map((c) => `
+        <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--inset);display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="display:flex;gap:8px;align-items:center;font-weight:500"><span class="dot ${c.ok ? "s-ok" : "s-error"}"></span>${esc(c.name)}</span><span class="mono small muted">${c.ok ? "ok" : "failed"} · ${c.ms} ms</span></div>
+          <span class="mono small" style="color:${c.ok ? "var(--muted)" : "var(--err)"};word-break:break-word">${esc(c.detail)}</span>
+        </div>`).join("");
+    };
+    $("#retest").onclick = test;
+    bindCreds(test);
+    test();
+  },
+
+  async settings() {
+    const [s] = await Promise.all([api("/api/settings"), state.status || refreshStatus()]);
+    state.settings = s;
+    const text = (k, label, ph = "", cls = "mono", type = "text") => `<label class="field">${label}<input type="${type}" name="${k}" value="${esc(Array.isArray(s[k]) ? s[k].join(", ") : s[k])}" placeholder="${esc(ph)}" class="${cls}"></label>`;
+    const tog = (k, label, hint) => `<label class="toggle"><span style="display:flex;flex-direction:column"><span>${label}</span><span class="small muted">${hint}</span></span><input type="checkbox" name="${k}" ${s[k] ? "checked" : ""}></label>`;
+    $("#view").innerHTML = `
+      <form id="sf" style="display:flex;flex-direction:column;gap:20px">
+        <div class="head"><div style="display:flex;flex-direction:column;gap:6px"><h1>Settings</h1><span class="muted">How the sync behaves. Credentials are under <a href="#/connections">Connections</a>.</span></div><button class="btn primary" type="submit">Save changes</button></div>
+        <div class="grid2">
+          <section class="card"><h2>Branding</h2>
+            <div style="display:flex;gap:14px;align-items:center;border:1px dashed var(--control);border-radius:10px;padding:14px">
+              <div class="logo" id="pvLogo" style="width:44px;height:44px;font-size:18px;border-radius:10px"></div>
+              <div><b id="pvName"></b><div class="small muted">Live preview of your sidebar</div></div>
+            </div>
+            ${text("appName", "Product name", "", "")}
+            ${text("logoUrl", "Logo URL", "https://…/logo.svg", "", "url")}
+            <label class="field">Accent color<span style="display:flex;gap:8px"><input type="color" id="accentPick" value="${esc(s.accentColor)}" style="width:44px;height:38px;padding:2px;border-radius:8px;border:1px solid var(--control);background:var(--inset)" aria-label="Pick accent color"><input type="text" name="accentColor" value="${esc(s.accentColor)}" class="mono" pattern="#[0-9a-fA-F]{6}"></span></label>
+            ${text("supportContact", "Support contact (email or URL)", "", "")}
+          </section>
+          <section class="card"><h2>Schedule and guardrails</h2>
+            ${text("schedule", "Cron schedule (blank turns it off), e.g. 0 2 * * * for 02:00 daily", "")}
+            <span class="mono small muted" id="cronHint"></span>
+            <div class="pair">
+              <label class="field">Max suspensions per run<input type="number" name="maxSuspensionsPerRun" min="0" value="${s.maxSuspensionsPerRun}"></label>
+              <label class="field">Parallel requests<input type="number" name="concurrency" min="1" max="20" value="${s.concurrency}"></label>
+            </div>
+            <div>
+              ${tog("scheduleDryRun", "Scheduled runs are previews", "Plan only. Nothing changes in Google.")}
+              ${tog("suspendMissing", "Suspend users deleted in BambooHR", "Linked Google users with no employee record.")}
+              ${tog("reactivateSuspended", "Reactivate suspended users", "When BambooHR marks them Active again.")}
+            </div>
+          </section>
+          <section class="card"><h2>Provisioning and offboarding</h2>
+            ${text("newUserOu", "OU for new users", "/")}
+            ${text("suspendedOu", "OU for suspended users (blank keeps their OU)", "")}
+            ${text("protectedOus", "Protected OUs, comma separated (never suspended or touched)", "")}
+            ${text("managedDomains", "Only create users in these domains (blank = domains already used in your Workspace)", "")}
+            ${text("recoveryEmail", "Recovery inbox for suspended users (blank = off)", "", "mono", "email")}
+            <div class="pair">
+              ${text("licenseProductId", "Licence product id", "Google-Apps")}
+              ${text("licenseSkus", "Licence SKUs to revoke on suspension", "")}
+            </div>
+          </section>
+          <section class="card"><div class="card-head"><h2>Custom field mapping</h2><button type="button" class="btn sm" id="addMap">+ Add field</button></div>
+            ${text("customSchema", "Google custom schema (blank turns mapping off)", "")}
+            <div class="map-row small muted"><span>Google field</span><span></span><span>BambooHR field</span><span></span></div>
+            <div id="maps" style="display:flex;flex-direction:column;gap:8px"></div>
+          </section>
+          <section class="card"><div class="card-head"><h2>Notifications</h2><button type="button" class="btn sm" id="testSlack">Send test</button></div>
+            <div class="kv"><span>Slack webhook (<span class="mono">SLACK_WEBHOOK_URL</span>)</span><span class="${state.status?.env?.SLACK_WEBHOOK_URL ? "s-ok" : "muted"}">${state.status?.env?.SLACK_WEBHOOK_URL ? "set" : "not set"}</span></div>
+            <label class="field">Send a Slack message
+              <select name="notifyOn">
+                ${[["failures", "When a run fails, has errors or suspensions are blocked"], ["always", "After every run"], ["off", "Never"]].map(([v, l]) => `<option value="${v}" ${s.notifyOn === v ? "selected" : ""}>${l}</option>`).join("")}
+              </select></label>
+            ${text("publicUrl", "Public URL of this console (adds a link to the run)", "https://…", "mono", "url")}
+          </section>
+        </div>
+      </form>`;
+    const f = $("#sf");
+    const mapRow = (g = "", b = "") => `<div class="map-row"><input type="text" class="mono" data-g value="${esc(g)}" placeholder="Google field" aria-label="Google field"><span class="muted" style="text-align:center">←</span><input type="text" class="mono" data-b value="${esc(b)}" placeholder="BambooHR field" aria-label="BambooHR field"><button type="button" class="icon-btn" data-del aria-label="Remove field">✕</button></div>`;
+    $("#maps").innerHTML = Object.entries(s.customFields).map(([g, b]) => mapRow(g, b)).join("");
+    $("#testSlack").onclick = async () => {
+      try { await api("/api/notifications/test", { method: "POST" }); toast("Test message sent to Slack"); } catch (err) { toast(err.message); }
+    };
+    $("#addMap").onclick = () => $("#maps").insertAdjacentHTML("beforeend", mapRow());
+    $("#maps").onclick = (e) => e.target.closest("[data-del]")?.parentElement.remove();
+    const preview = () => {
+      const name = f.appName.value.trim() || "Directory Sync", logo = f.logoUrl.value.trim();
+      $("#pvName").textContent = name;
+      $("#pvLogo").style.background = /^#[0-9a-f]{6}$/i.test(f.accentColor.value) ? f.accentColor.value : "";
+      $("#pvLogo").innerHTML = logo ? `<img src="${esc(logo)}" alt="">` : esc(name.charAt(0).toUpperCase());
+    };
+    $("#accentPick").oninput = (e) => { f.accentColor.value = e.target.value; preview(); };
+    f.accentColor.oninput = () => { if (/^#[0-9a-f]{6}$/i.test(f.accentColor.value)) $("#accentPick").value = f.accentColor.value; preview(); };
+    f.appName.oninput = f.logoUrl.oninput = preview;
+    $("#cronHint").textContent = state.status?.nextRuns?.length ? "next: " + state.status.nextRuns.map(fmtTime).join(" · ") : "";
+    preview();
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      const list = (v) => v.split(",").map((x) => x.trim()).filter(Boolean);
+      const body = {
+        appName: f.appName.value.trim(), logoUrl: f.logoUrl.value.trim(), accentColor: f.accentColor.value.trim(), supportContact: f.supportContact.value.trim(),
+        schedule: f.schedule.value.trim(), maxSuspensionsPerRun: Number(f.maxSuspensionsPerRun.value), concurrency: Number(f.concurrency.value),
+        scheduleDryRun: f.scheduleDryRun.checked, suspendMissing: f.suspendMissing.checked, reactivateSuspended: f.reactivateSuspended.checked,
+        newUserOu: f.newUserOu.value.trim() || "/", suspendedOu: f.suspendedOu.value.trim(), protectedOus: list(f.protectedOus.value),
+        managedDomains: list(f.managedDomains.value.toLowerCase()), recoveryEmail: f.recoveryEmail.value.trim(),
+        notifyOn: f.notifyOn.value, publicUrl: f.publicUrl.value.trim(),
+        licenseProductId: f.licenseProductId.value.trim(), licenseSkus: list(f.licenseSkus.value), customSchema: f.customSchema.value.trim(),
+        customFields: Object.fromEntries([...document.querySelectorAll("#maps .map-row")].map((r) => [$("[data-g]", r).value.trim(), $("[data-b]", r).value.trim()]).filter(([g, b]) => g && b)),
+      };
+      try {
+        await api("/api/settings", { method: "PUT", body: JSON.stringify(body) });
+        await refreshStatus();
+        $("#cronHint").textContent = state.status.nextRuns.length ? "next: " + state.status.nextRuns.map(fmtTime).join(" · ") : "schedule off";
+        toast("Settings saved");
+      } catch (err) { toast(err.message); }
+    };
+  },
+};
+
+/* ---------- credentials ---------- */
+const CREDS = {
+  BAMBOO_SUBDOMAIN: { label: "BambooHR subdomain", hint: "The part before .bamboohr.com", type: "text", plain: true, ph: "" },
+  BAMBOO_API_KEY: { label: "BambooHR API key", hint: "BambooHR → your profile → API Keys", type: "password", ph: "Paste the API key" },
+  GOOGLE_ADMIN: { label: "Google super admin", hint: "The admin the service account acts as", type: "email", plain: true, ph: "" },
+  GOOGLE_CREDENTIALS: { label: "Google service account key", hint: "The JSON key file from Google Cloud (domain-wide delegation)", type: "file" },
+  SLACK_WEBHOOK_URL: { label: "Slack webhook (optional)", hint: "Incoming Webhook URL for failure alerts", type: "password", ph: "https://hooks.slack.com/services/…" },
+};
+
+function credCard(cr) {
+  const tag = (it) => it.source === "env" ? `<span class="tag muted">env var</span>`
+    : it.source === "console" ? `<span class="tag s-ok">saved · encrypted</span>`
+    : it.required ? `<span class="tag s-warn">required</span>` : `<span class="tag muted">not set</span>`;
+  const field = (it) => {
+    const d = CREDS[it.key], locked = it.source === "env", saved = it.source === "console";
+    const value = d.plain ? cr.values[it.key] : "";
+    const input = d.type === "file"
+      ? `<input type="file" accept=".json,application/json" data-k="${it.key}" ${locked ? "disabled" : ""} aria-label="${esc(d.label)}">`
+      : `<input type="${d.type}" class="mono" data-k="${it.key}" value="${esc(value)}" ${locked ? "disabled" : ""} autocomplete="off"
+           placeholder="${esc(locked ? "Set by an environment variable" : saved && !d.plain ? "Saved. Type to replace." : d.ph)}" aria-label="${esc(d.label)}">`;
+    const extra = it.key === "GOOGLE_CREDENTIALS" ? `${cr.values.serviceAccount ? `<span class="mono small muted">${esc(cr.values.serviceAccount)}${cr.values.clientId ? ` · client ID ${esc(cr.values.clientId)}` : ""}</span>` : ""}
+      <details class="small"><summary class="muted" style="cursor:pointer">Domain-wide delegation: client ID and scopes to authorize</summary>
+        <div class="muted" style="margin-top:6px">Admin console → Security → API controls → Domain-wide delegation → Add new. Paste the client ID${cr.values.clientId ? ` <b class="mono">${esc(cr.values.clientId)}</b>` : " (client_id in the JSON key)"} and this scope list:</div>
+        <textarea readonly class="mono" style="height:auto;min-height:64px;padding:8px 12px;margin-top:6px;font-size:12px" onclick="this.select()">${esc(cr.scopes.join(","))}</textarea></details>` : "";
+    return `<div class="cred"><div class="cred-head"><span>${esc(d.label)}</span><span style="display:flex;gap:10px;align-items:center">${saved ? `<button type="button" class="linkish" data-rm="${it.key}">remove</button>` : ""}${tag(it)}</span></div>
+      ${input}${extra}<span class="small muted">${esc(d.hint)}</span></div>`;
+  };
+  return `<section class="card"><div class="card-head"><h2>Credentials</h2><button class="btn primary sm" form="credForm" type="submit">Save credentials</button></div>
+    ${cr.error ? `<div class="banner">${esc(cr.error)}</div>` : ""}
+    <span class="small muted">Stored encrypted (AES-256-GCM) on this server${cr.keySource === "env" ? " with your ENCRYPTION_KEY" : ""}. Secrets are write-only: once saved they are never shown again. Environment variables, when set, take precedence.</span>
+    <form id="credForm" autocomplete="off">${cr.items.map(field).join("")}</form></section>`;
+}
+
+function bindCreds(retest) {
+  const form = $("#credForm");
+  if (!form) return;
+  const save = async (body) => {
+    try {
+      await api("/api/credentials", { method: "PUT", body: JSON.stringify(body) });
+      toast("Credentials saved");
+      await views.connections();
+    } catch (err) { toast(err.message); }
+  };
+  form.onclick = (e) => {
+    const k = e.target.closest("[data-rm]")?.dataset.rm;
+    if (k && confirm(`Remove the saved ${CREDS[k].label}?`)) save({ [k]: "" });
+  };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const body = {};
+    for (const el of form.querySelectorAll("[data-k]:not([disabled])")) {
+      const k = el.dataset.k, d = CREDS[k];
+      if (el.type === "file") { if (el.files[0]) body[k] = await el.files[0].text(); }
+      else if (d.plain ? el.value.trim() !== (state.status?.[k === "GOOGLE_ADMIN" ? "googleAdmin" : "bambooSubdomain"] ?? "") : el.value.trim()) body[k] = el.value.trim();
+    }
+    if (!Object.keys(body).length) return toast("Nothing to save");
+    save(body);
+  };
+}
+
+/* ---------- first run ---------- */
+function setupView(user) {
+  $("#view").innerHTML = `<section class="card" style="max-width:460px;margin:8vh auto 0">
+    <h1>Welcome</h1>
+    <span class="muted">Create the admin password for this console. You'll sign in as <b class="mono">${esc(user)}</b>, then add your BambooHR and Google credentials.</span>
+    <form id="setupForm" style="display:flex;flex-direction:column;gap:12px">
+      <label class="field">Password (12+ characters)<input type="password" name="p1" minlength="12" required autocomplete="new-password"></label>
+      <label class="field">Repeat password<input type="password" name="p2" minlength="12" required autocomplete="new-password"></label>
+      <button class="btn primary" type="submit">Create password</button>
+    </form></section>`;
+  $("#setupForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    if (f.p1.value !== f.p2.value) return toast("Passwords don't match");
+    try {
+      await api("/api/setup", { method: "POST", body: JSON.stringify({ password: f.p1.value }) });
+      location.hash = "#/connections";
+      location.reload(); // the browser now asks for the new login
+    } catch (err) { toast(err.message); }
+  };
+}
+
+function connLine(c) {
+  return `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:4px 0">
+    <span style="display:flex;gap:8px;align-items:center"><span class="dot ${c.ok ? "s-ok" : "s-error"}"></span>${esc(c.name)}</span>
+    <span class="mono small ${c.ok ? "muted" : "s-error"}">${c.ok ? `ok · ${c.ms} ms` : "failed"}</span></div>`;
+}
+
+function runsTable(runs) {
+  if (!runs.length) return `<div class="empty">No runs yet.</div>`;
+  return `<div class="table-wrap"><table>
+    <thead><tr><th>Started</th><th>Status</th><th>Mode</th><th>Trigger</th><th class="num">+ / ~ / −</th><th class="num">Errors</th><th class="num">Duration</th></tr></thead>
+    <tbody>${runs.map((r) => `<tr class="click" data-href="#/runs/${esc(r.id)}" tabindex="0">
+      <td class="mono" style="color:var(--text-2);white-space:nowrap">${esc(fmtTime(r.startedAt))}</td><td>${pill(r.status)}</td>
+      <td style="color:var(--muted)">${r.dryRun ? "preview" : "live"}${r.employeeId ? ` · #${esc(r.employeeId)}` : ""}</td><td style="color:var(--muted)">${esc(r.trigger)}</td>
+      <td class="num">${r.status === "failed" ? "—" : `${r.counts.create} / ${r.counts.update} / ${r.counts.suspend}`}</td>
+      <td class="num ${r.counts.errors ? "s-error" : ""}">${r.status === "failed" ? "—" : r.counts.errors}</td><td class="num muted">${fmtMs(r.durationMs)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function actionCard(a) {
+  const diff = a.diff?.length ? `<table class="diff">${a.diff.map((d) => `<tr><td>${esc(d.field)}</td><td class="del">− ${esc(d.before)}</td><td class="add">+ ${esc(d.after)}</td></tr>`).join("")}</table>` : "";
+  const info = a.error || a.reason;
+  return `<article class="action">
+    <div class="action-head"><span class="type ${esc(a.type)}">${esc(a.type)}</span><span style="font-weight:500">${esc(a.name || "—")}</span>
+      <span class="mono small muted" style="word-break:break-all">${esc(a.email || "no email")}${a.employeeId ? ` · #${esc(a.employeeId)}` : ""}${a.ms != null ? ` · ${a.ms} ms` : ""}</span>
+      <span class="small s-${esc(a.status)}" style="margin-left:auto">● ${esc(a.status)}</span></div>
+    ${info ? `<div class="sub ${a.error ? "s-error" : ""}" style="${a.error ? "color:var(--err)" : ""}">${esc(info)}</div>` : ""}
+    ${diff ? `<div style="overflow-x:auto">${diff}</div>` : ""}
+    ${a.log?.length ? `<div class="sub">${a.log.map((l) => `<span>↳ ${esc(l)}</span>`).join("")}</div>` : ""}
+    ${a.request ? `<div class="sub"><details><summary>${esc(a.request.method)} ${esc(a.request.path)}</summary><pre>${esc(JSON.stringify(a.request.body, null, 2))}</pre></details></div>` : ""}
+  </article>`;
+}
+
+function poll(fn, ms) { clearTimeout(state.timer); state.timer = setTimeout(() => fn().catch(() => {}), ms); }
+
+document.addEventListener("click", (e) => { const tr = e.target.closest("tr[data-href]"); if (tr) location.hash = tr.dataset.href; });
+document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches?.("tr[data-href]")) location.hash = e.target.dataset.href; });
+
+async function route() {
+  clearTimeout(state.timer);
+  const [, name = "overview", id] = location.hash.split("/");
+  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.r === (name === "runs" && id ? "runs" : name)));
+  try {
+    if (!state.setupDone) {
+      const setup = await api("/api/setup");
+      if (setup.needsPassword) return setupView(setup.user);
+      state.setupDone = true;
+    }
+    if (name === "runs" && id) await views.run(decodeURIComponent(id));
+    else await (views[name] || views.overview)();
+    if (!state.status) refreshStatus().catch(() => {});
+  } catch (e) {
+    $("#view").innerHTML = `<div class="banner">${esc(e.message)}</div>`;
+  }
+}
+window.addEventListener("hashchange", () => { window.scrollTo(0, 0); route(); });
+route();
+</script>
+</body>
+</html>
