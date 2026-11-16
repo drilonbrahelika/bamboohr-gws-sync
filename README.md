@@ -180,6 +180,12 @@ public/index.html   the UI (no build step)
 - Raise `CONCURRENCY` for large tenants. The Directory API quota is per project, and the client backs off automatically.
 - Run a single instance, since the run lock is in-process. Use the CLI with an external scheduler if you need something else.
 
+## Next step: app accounts from Google groups
+
+This service keeps Google Workspace users in step with BambooHR. Once people are in Google, the next job is giving them the right app accounts and taking them away when they leave. [AppDoorman](https://appdoorman.com), by the same author, does that from your Google groups, over SCIM or through each app's admin API.
+
+To see which apps Google Workspace already provisions on its own, and which plan each app needs for SCIM, see [Can Google Workspace provision your apps?](https://appdoorman.com/docs/google-workspace-auto-provisioning)
+
 ## License
 
 [MIT](LICENSE)
